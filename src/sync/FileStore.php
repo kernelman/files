@@ -7,7 +7,7 @@
  * Time: 10:06 AM
  */
 
-namespace Store\File\Sync;
+namespace Files\Sync;
 
 use Exceptions\AlreadyExistsException;
 use Exceptions\InvalidArgumentException;

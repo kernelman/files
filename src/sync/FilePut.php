@@ -7,7 +7,7 @@
  * Time: 4:11 PM
  */
 
-namespace Store\File\Sync;
+namespace Files\Sync;
 
 
 /**
