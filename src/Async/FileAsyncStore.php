@@ -7,7 +7,7 @@
  * Time: 10:06 AM
  */
 
-namespace Files\Sync;
+namespace Files\Async;
 
 use Exceptions\AlreadyExistsException;
 use Exceptions\InvalidArgumentException;
@@ -18,15 +18,16 @@ use Exceptions\UnReadableException;
 use Exceptions\UnWritableException;
 
 /**
- * 同步操作目录和文件的文件存储类
+ * 异步操作目录和文件的文件存储类
  *
  * Class FileStore
  * @package Api
  */
-class FileStore {
+class FileAsyncStore {
 
-    public static $files   = null;     // 文件绝对路径
-    public static $content = null;     // 写入内容，内容须为字符串
+    public static $once     = true;     // true: 一次性操作, false: 分段操作
+    public static $files    = null;     // 文件绝对路径
+    public static $content  = null;     // 写入内容，内容须为字符串
 
     /**
      * 检查路径和内容参数
@@ -359,15 +360,15 @@ class FileStore {
      * @param $files
      * @param $content
      * @param bool $append
-     * @param bool $locked
      * @return bool
      * @throws AlreadyExistsException
      * @throws InvalidArgumentException
      * @throws UnExecutableException
      * @throws UnReadableException
      * @throws UnWritableException
+     * @throws NotFoundException
      */
-    public static function save($files, $content, $append = true, $locked = true) {
+    public static function save($files, $content, $append = true) {
 
         self::$files    = $files;
         self::$content  = $content;
@@ -389,7 +390,7 @@ class FileStore {
 
             // 当前目录和文件有读取、执行和写入权限
             if($checkDirReadable && $checkDirExecutable && $checkDirWritable && $checkFileReadable && $checkFileWritable) {
-                $put = new FilePut(self::$files, self::$content, $append, $locked); // 默认锁定文件并追加写入
+                $put = new FileAsyncPut(self::$files, self::$content, $append); // 默认锁定文件并追加写入
                 return $put->run();
             }
 
@@ -397,13 +398,13 @@ class FileStore {
 
             // 如果文件的当前目录存在, 并有读取、执行和写入权限
             if (self::checkDir($currentDir) && $checkDirReadable && $checkDirWritable && $checkDirExecutable) {
-                $put = new FilePut(self::$files, self::$content, $append, $locked); // 默认锁定文件并追加写入
+                $put = new FileAsyncPut(self::$files, self::$content, $append); // 默认锁定文件并追加写入
                 return $put->run();
             }
 
             // 如果文件的当前目录不存在，那么就创建目录
             if (!self::checkDir($currentDir) && self::createDir($currentDir)) {
-                $put = new FilePut(self::$files, self::$content, $append, $locked); // 默认锁定文件并追加写入
+                $put = new FileAsyncPut(self::$files, self::$content, $append); // 默认锁定文件并追加写入
                 return $put->run();
             }
         }
@@ -415,14 +416,46 @@ class FileStore {
      * 获取文件
      *
      * @param $file
-     * @return bool|string
+     * @param null $callback
+     * @return bool|mixed
      */
-    public static function get($file) {
+    public static function get($file, $callback = null) {
 
         if(self::checkFile($file)) {
-            return file_get_contents($file);
+
+            if (self::$once) {
+                return self::once($file, $callback);
+            }
+
+            return self::block($file, $callback);
         }
 
         return false;
+    }
+
+    /**
+     * 一次性读取文件内容
+     *
+     * @param $file
+     * @param $callback
+     * @return mixed
+     */
+    public static function once($file, $callback) {
+        return \Swoole\Async::readFile($file, function ($file, $content) use ($callback) {
+            return $callback($file, $content);
+        });
+    }
+
+    /**
+     * 分段读取文件内容
+     *
+     * @param $file
+     * @param $callback
+     * @return mixed
+     */
+    public static function block($file, $callback) {
+        return \Swoole\Async::read($file, function ($file, $content) use ($callback) {
+            return $callback($file, $content);
+        });
     }
 }

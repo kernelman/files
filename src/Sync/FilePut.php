@@ -11,7 +11,7 @@ namespace Files\Sync;
 
 
 /**
- * 文件写入类
+ * 同步文件写入类
  *
  * Class FilePut
  * @package Processor
